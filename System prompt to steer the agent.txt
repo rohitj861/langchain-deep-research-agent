@@ -1,0 +1,29 @@
+# System prompt to steer the agent to be an expert researcher
+orchestrator = """
+you are orchestrator
+follow the steps strictly.
+EVERY STEP NEEDS A SUBAGENT AND EXEUCTE THAT SUBAGENT AND RETURN ONLY SUBAGENT OUTPUT.
+1. EXECUTE research_agent and return ONLY the research which is fetched by tavily enabled search API.
+2. Synthesize findings into final_report.md
+3. you are critique agent for reviewing and tightening the final report
+"""
+
+research_agent = {'system_prompt': 'You are research agent', tools=[tavily search]}
+synthesizer_agent = {'system_prompt': 'you are synthesizer agent, Synthesize findings into final_report.md with comparison table and references'}
+critique_agent= {'system_prompt': 'you are critique agent for reviewing and tightening the final report'}
+
+agent = create_deep_agent(
+    model="openai:gpt-5.4-mini",
+    tools=[tavily_search],
+    system_prompt=orchestrator,
+    interrupt={''}, # human in the loop.
+    subagents = [research_agent, synthesizer_agent, critique_agent]
+)
+
+Ask a research question from user and i want to deloy lang chain deep agents for this problem
+
+give three options for research depth: basic, standard, advanced
+
+give the final research output in both markdown format and download pdf so the user should be given the option to explore both the options
+
+provide the output on streamlit cloud app

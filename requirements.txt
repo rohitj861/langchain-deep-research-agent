@@ -1,0 +1,9 @@
+deepagents>=0.7.11
+langchain>=1.3
+langchain-openai>=1.4
+langchain-tavily>=0.2.18
+langgraph>=1.0
+streamlit>=1.50
+fpdf2>=2.8
+markdown>=3.7
+python-dotenv>=1.0
