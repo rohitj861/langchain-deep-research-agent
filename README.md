@@ -3,6 +3,8 @@
 Ask a research question, pick a depth, and a team of agents researches the web, writes a report, and critiques it.
 You can read the result in the app or download it as **Markdown** or **PDF**.
 
+**Live app:** https://rj-deep-research-agent.streamlit.app
+
 ## How it works
 
 ```
@@ -24,7 +26,8 @@ User question + depth
 | Standard | 4-6      | 5 / advanced           | ~1,200-1,800 words| 1 |
 | Advanced | 8-12     | 8 / advanced           | ~2,500-3,500 words| 2 |
 
-You can change the presets in `research_agent/config.py`.
+You can change the presets in `research_agent/config.py`. The search counts are targets given to the model, not hard
+limits, so a run can use a few more searches (a Standard test run used 11).
 
 **Tavily-only sourcing, top 5 references**
 - The only search tool is Tavily (`research_agent/sources.py`). deepagents' built-in `general-purpose` subagent
