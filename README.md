@@ -26,6 +26,17 @@ User question + depth
 
 You can change the presets in `research_agent/config.py`.
 
+**Tavily-only sourcing, top 5 references**
+- The only search tool is Tavily (`research_agent/sources.py`). deepagents' built-in `general-purpose` subagent
+  is replaced with a Tavily-only version, and the prompts forbid answering from the model's own knowledge.
+- Every Tavily result is recorded in a `SourceRegistry`. The synthesizer and critique agents pick references from
+  it with the `list_tavily_sources` tool.
+- After the run, `enforce_references()` removes any URL that Tavily did not return, keeps at most **5** references
+  (filling up from the highest-ranked Tavily results if fewer are cited), and renumbers the inline `[n]` citations to match.
+
+**Live UI**: a Research → Synthesize → Critique tracker, live Tavily search and source counters, a list of sources
+ranked by relevance, and a references tab showing each reference's Tavily score and the query that found it.
+
 **Human in the loop** (sidebar toggle): the agent pauses before each subagent runs. You then approve or reject that
 step, and you can give feedback when you reject. This uses deepagents `interrupt_on={"task": ...}` together with a checkpointer.
 
@@ -37,8 +48,9 @@ research_agent/
   config.py                    depth presets, model name
   agent.py                     orchestrator + 3 subagents (create_deep_agent)
   runner.py                    streaming progress, interrupts/resume, report extraction
+  sources.py                   Tavily-only search tool, source registry, 5-reference enforcement
   pdf_export.py                Markdown → PDF (fpdf2, Unicode font support)
-tests/test_pipeline.py         offline test with a scripted fake model (no API keys needed)
+tests/                         offline tests (scripted fake model, reference enforcement)
 requirements.txt / packages.txt
 .env.example / .streamlit/secrets.toml.example
 ```

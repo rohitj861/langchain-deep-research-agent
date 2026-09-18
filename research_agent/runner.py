@@ -9,13 +9,15 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.types import Command
 
 from .config import REPORT_PATH
+from .sources import enforce_references
 
 
 @dataclass
 class ProgressEvent:
     source: str   # "orchestrator" or the subagent namespace
-    kind: str     # "tool_call" | "tool_result" | "message"
+    kind: str     # "tool_call" | "tool_result" | "message" | "stage"
     text: str
+    stage: str | None = None   # subagent name, set on "stage" events
 
 
 @dataclass
@@ -24,6 +26,7 @@ class RunOutcome:
     pending_actions: list[dict[str, Any]] = field(default_factory=list)
     report: str | None = None
     summary: str | None = None
+    stats: dict = field(default_factory=dict)
 
 
 def _shorten(text: str, limit: int = 300) -> str:
@@ -61,6 +64,9 @@ def stream_run(agent, payload, thread_id: str) -> Iterator[ProgressEvent | RunOu
             for msg in update.get("messages", []) or []:
                 if isinstance(msg, AIMessage):
                     for call in msg.tool_calls:
+                        if call["name"] == "task" and not namespace:
+                            sub = call.get("args", {}).get("subagent_type", "")
+                            yield ProgressEvent(source, "stage", f"Stage: {sub}", stage=sub)
                         yield ProgressEvent(source, "tool_call", _describe_tool_call(call))
                     if not msg.tool_calls and msg.content:
                         yield ProgressEvent(source, "message", _shorten(msg.text, 400))
@@ -79,7 +85,13 @@ def stream_run(agent, payload, thread_id: str) -> Iterator[ProgressEvent | RunOu
     files = state.get("files", {}) or {}
     report = file_data_to_string(files[REPORT_PATH]) if REPORT_PATH in files else None
     summary = next((m.text for m in reversed(state.get("messages", [])) if isinstance(m, AIMessage) and m.text), None)
-    yield RunOutcome(status="done", report=report, summary=summary)
+
+    stats = {}
+    registry = getattr(agent, "source_registry", None)
+    if report and registry is not None:
+        # Hard guarantee: only Tavily-returned URLs, at most 5 references.
+        report, stats = enforce_references(report, registry)
+    yield RunOutcome(status="done", report=report, summary=summary, stats=stats)
 
 
 def initial_input(question: str) -> dict:
