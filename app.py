@@ -64,15 +64,18 @@ defaults = {
     "stage": None,            # currently active pipeline stage
     "started_at": None,
     "elapsed": None,
+    "stream_active": False,   # True while a stream is being consumed; stays True if a rerun cut it off
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
+st.session_state.setdefault("form_nonce", 0)
 S = st.session_state
 
 
 def reset():
     for k, v in defaults.items():
         S[k] = v
+    S.form_nonce += 1  # fresh, empty question box
 
 
 # ---------------------------------------------------------------- sidebar
@@ -112,25 +115,35 @@ with st.sidebar:
 st.title("🔎 Deep Research Agent")
 st.caption("LangChain Deep Agents · orchestrator + research / synthesizer / critique subagents · Tavily-only search")
 
-locked = S.phase in ("running", "awaiting_approval")
+# The question comes only from the user: the box always starts empty, and a run starts only when
+# the user clicks "Run research" (Enter / Ctrl+Enter do not submit, and reruns never restart a run).
+if S.phase == "idle":
+    with st.form(f"research_form_{S.form_nonce}", enter_to_submit=False, border=False):
+        question = st.text_area(
+            "What do you want to research?",
+            value="",
+            placeholder="Type your research question here",
+            height=100,
+        )
+        depth = st.radio(
+            "Research depth",
+            options=list(DEPTH_PRESETS),
+            format_func=lambda k: f"{DEPTH_PRESETS[k].label}: {DEPTH_PRESETS[k].description}",
+            index=list(DEPTH_PRESETS).index("standard"),
+        )
+        submitted = st.form_submit_button("🚀 Run research", type="primary")
+else:
+    submitted = False
+    with st.container(border=True):
+        st.markdown(f"**Your question:** {S.question}")
+        st.caption(f"Research depth: {DEPTH_PRESETS[S.depth].label}")
+    if S.phase in ("done", "error") and st.button("🔄 Start new research"):
+        reset()
+        st.rerun()
 
-question = st.text_area(
-    "What do you want to research?",
-    value=S.question,
-    placeholder="e.g. Compare the leading vector databases for production RAG in 2026",
-    height=100,
-    disabled=locked,
-)
-
-depth = st.radio(
-    "Research depth",
-    options=list(DEPTH_PRESETS),
-    format_func=lambda k: f"{DEPTH_PRESETS[k].label}: {DEPTH_PRESETS[k].description}",
-    index=list(DEPTH_PRESETS).index(S.depth),
-    disabled=locked,
-)
-
-if st.button("🚀 Run research", type="primary", disabled=locked or not question.strip()):
+if submitted and not question.strip():
+    st.warning("Please type your research question first.")
+elif submitted:
     missing = [k for k in KEY_NAMES if not (os.getenv(k) or session_keys.get(k))]
     if missing:
         st.error(f"Missing API key(s): {', '.join(missing)}. Add them in the sidebar or in secrets.")
@@ -210,7 +223,28 @@ def current_registry():
 
 
 # ---------------------------------------------------------------- running
+if S.phase == "running" and S.stream_active:
+    # A page interaction/rerun cut the previous stream off. Never restart on our own: wait for the user.
+    S.stream_active = False
+    S.phase = "paused"
+
+if S.phase == "paused":
+    render_pipeline(st.empty(), S.stage)
+    st.warning(
+        "The run was interrupted because the page was refreshed or clicked during research. "
+        "Nothing will run until you choose."
+    )
+    c1, c2 = st.columns(2)
+    if c1.button("▶️ Continue this run", type="primary", use_container_width=True):
+        S.resume_payload = None  # continue from the last checkpoint, without re-sending the question
+        S.phase = "running"
+        st.rerun()
+    if c2.button("✖️ Discard", use_container_width=True):
+        reset()
+        st.rerun()
+
 if S.phase == "running":
+    S.stream_active = True
     st.divider()
     pipeline_box = st.empty()
     render_pipeline(pipeline_box, S.stage)
@@ -250,6 +284,8 @@ if S.phase == "running":
                 S.error = f"{type(e).__name__}: {e}"
                 S.phase = "error"
                 status.update(label="Run failed", state="error")
+    # Reached only when the stream ended normally (Streamlit's rerun/stop exceptions skip this line).
+    S.stream_active = False
     st.rerun()
 
 # ---------------------------------------------------------------- human in the loop

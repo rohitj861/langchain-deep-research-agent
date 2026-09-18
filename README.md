@@ -93,5 +93,8 @@ python -m pytest tests -q
 - If you deploy publicly without secrets, each visitor can enter their own keys in the sidebar. Those keys are
   passed straight to that visitor's agent and never shared with other sessions. Keys typed in the sidebar only apply
   to `openai:` models; other providers read their key from secrets/env.
-- Agent state is held in memory (`InMemorySaver`), so a browser refresh starts over. Avoid interacting with the page
-  while a run is in progress, because Streamlit reruns will interrupt the stream.
+- **User-initiated runs only.** The question box always starts empty, and the question comes only from the user.
+  A run starts only when the user clicks **Run research**: Enter and Ctrl+Enter don't submit, and page reruns never start
+  or restart a run. If a run is interrupted (for example by clicking during research), the app pauses and asks whether
+  to **Continue this run** (from its last checkpoint) or **Discard** it.
+- Agent state is held in memory (`InMemorySaver`), so a browser refresh starts over.
